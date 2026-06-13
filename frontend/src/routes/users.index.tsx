@@ -26,7 +26,7 @@ function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
-  fetch("http://127.0.0.1:8000/users")
+  fetch("https://sentinal-ai-0mt0.onrender.com/users")
     .then((res) => res.json())
     .then((data) => {
       setUsers(data);

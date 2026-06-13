@@ -30,7 +30,7 @@ function UserInvestigation() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`http://127.0.0.1:8000/user/${userId}`)
+    fetch(`https://sentinal-ai-0mt0.onrender.com/user/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         // Map backend snake_case / missing fields to what your UI expects

@@ -24,7 +24,7 @@ function IncidentTimeline() {
  const [incidents, setIncidents] = useState<any[]>([]);
   const rows = incidents.filter((i) => filter === "all" || i.severity === filter);
 useEffect(() => {
-  fetch("http://127.0.0.1:8000/incidents")
+  fetch("https://sentinal-ai-0mt0.onrender.com/incidents")
     .then((res) => res.json())
     .then((data) => {
       setIncidents(data);
