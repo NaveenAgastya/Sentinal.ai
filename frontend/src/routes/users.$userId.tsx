@@ -1,6 +1,6 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ArrowLeft, Laptop, Lock, Mail, MapPin, ShieldAlert, Globe } from "lucide-react";
+import { ArrowLeft, Laptop, Lock, Mail, MapPin, ShieldAlert, Globe, Loader2 } from "lucide-react";
 import { RiskBadge } from "@/components/risk-badge";
 import { useEffect, useState } from "react";
 
@@ -11,7 +11,6 @@ export const Route = createFileRoute("/users/$userId")({
       { name: "description", content: "Per-user investigation surface with behavior signals, timeline, and AI assessment." },
     ],
   }),
-  // Keep TanStack loader clean or remove if purely using client-side fetch
   loader: ({ params }) => {
     return { userId: params.userId };
   },
@@ -30,19 +29,23 @@ function UserInvestigation() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`https://sentinal-ai-0mt0.onrender.com/user/${userId}`)
+    // FIXED: Swapped hardcoded URL for the Vite environment variable
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+    
+    setLoading(true);
+    fetch(`${baseUrl}/user/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         // Map backend snake_case / missing fields to what your UI expects
         const mappedUser = {
           id: data.user_id,
           name: data.username || "Unknown User",
-          email: `${data.username || "user"}@company.com`, // Fallback strategy
+          email: `${data.username || "user"}@company.com`, 
           location: data.location || "Remote / Unknown",
           device: data.device || "Corporate Laptop",
           department: data.department || "Unassigned",
           riskLevel: data.riskLevel || "high", 
-          riskScore: data.riskScore || 78, // Fallback if API missing score
+          riskScore: data.riskScore || 78, 
           riskFactors: data.riskFactors || [],
           activityCount: data.activityCount || 0
         };
@@ -55,15 +58,29 @@ function UserInvestigation() {
       });
   }, [userId]);
 
+  // FIXED: Adjusted plain text loading state to match the modern Sentinel dashboard design
   if (loading) {
-    return <div className="p-10 text-white">Loading user...</div>;
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-2 text-muted-foreground">
+        <Loader2 className="h-7 w-7 animate-spin text-primary" />
+        <span className="font-mono text-xs uppercase tracking-widest">Querying User Index...</span>
+      </div>
+    );
   }
 
-  if (!details) {
-    return <div className="p-10 text-white">No data found for this session.</div>;
+  if (!details || details.id === undefined) {
+    return (
+      <div className="mx-auto max-w-[1600px] px-6 py-8">
+        <Link to="/users" className="mb-4 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-3 w-3" /> Back to queue
+        </Link>
+        <div className="glass-panel text-center py-12 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+          No profile found for Subject ID: {userId}
+        </div>
+      </div>
+    );
   }
 
-  // Generate clean initials from the username
   const initials = details.name.substring(0, 2).toUpperCase();
 
   return (
@@ -138,21 +155,27 @@ function UserInvestigation() {
             <ShieldAlert className="h-4 w-4 text-warning" />
             <div className="text-sm font-medium">Contributing Signals</div>
           </div>
-          <ul className="space-y-3">
-            {details.riskFactors?.map((factor: string, index: number) => (
-              <li key={index}>
-                <div className="rounded-md border border-border p-3">
-                  <div className="text-sm">⚠️ {factor}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {details.riskFactors.length === 0 ? (
+            <div className="text-center py-6 font-mono text-[11px] text-muted-foreground uppercase tracking-wider">
+              No anomaly signals cataloged
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {details.riskFactors.map((factor: string, index: number) => (
+                <li key={index}>
+                  <div className="rounded-md border border-border p-3 bg-muted/20">
+                    <div className="text-sm text-foreground">⚠️ {factor}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
-      <div className="mt-4 rounded-md border border-border p-3">
-        <div className="text-xs text-muted-foreground">Total Activities</div>
-        <div className="text-2xl font-bold">{details.activityCount}</div>
+      <div className="mt-3 rounded-xl border border-border bg-muted/20 p-5 max-w-xs">
+        <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Total Activities</div>
+        <div className="mt-1 text-3xl font-bold font-mono tracking-tight tabular-nums">{details.activityCount}</div>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { ArrowUpDown, Eye, Filter, Search } from "lucide-react";
-import { users, type RiskLevel } from "@/lib/mock-data";
+import { ArrowUpDown, Eye, Filter, Search, Loader2 } from "lucide-react";
+import { type RiskLevel } from "@/lib/mock-data";
 import { RiskBadge, RiskScore } from "@/components/risk-badge";
 import { SectionHeader } from "@/components/section-header";
 
@@ -24,30 +24,49 @@ function UsersPage() {
   const [filter, setFilter] = useState<RiskLevel | "all">("all");
   const [sortDesc, setSortDesc] = useState(true);
   const [users, setUsers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true); // Handle free-tier sleep cycles
 
   useEffect(() => {
-  fetch("https://sentinal-ai-0mt0.onrender.com/users")
-    .then((res) => res.json())
-    .then((data) => {
-      setUsers(data);
-    })
-    .catch((err) => console.error(err));
-}, []);
+    // FIXED: Use dynamic production environment variable with localhost fallback
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+    
+    setIsLoading(true);
+    fetch(`${baseUrl}/users`)
+      .then((res) => res.json())
+      .then((data) => {
+        // FIXED: Enforce field schema mappings to ensure UI stability against snake_case payloads
+        const parsedArray = Array.isArray(data) ? data : [];
+        const normalized = parsedArray.map((u: any) => ({
+          id: String(u.user_id || u.id || ""),
+          name: u.username || u.name || "Unknown User",
+          email: u.email || `${u.username || "user"}@company.com`,
+          department: u.department || "Unassigned",
+          location: u.location || "Remote",
+          riskScore: Number(u.riskScore || u.risk_score || 50),
+          riskLevel: (u.riskLevel || u.risk_level || "medium").toLowerCase() as RiskLevel,
+          alerts: Number(u.alerts || u.activityCount || 0),
+          status: u.status || "active",
+          lastActivity: u.lastActivity || u.timestamp || "Recent"
+        }));
+        setUsers(normalized);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to sync queue data: ", err);
+        setIsLoading(false);
+      });
+  }, []);
 
   const rows = useMemo(() => {
     return users
       .filter((u) => filter === "all" || u.riskLevel === filter)
       .filter((u) => !q || u.name.toLowerCase().includes(q.toLowerCase()) || u.email.toLowerCase().includes(q.toLowerCase()) || u.id.includes(q))
       .sort((a, b) => sortDesc ? b.riskScore - a.riskScore : a.riskScore - b.riskScore);
-  }, [q, filter, sortDesc]);
+  }, [q, filter, sortDesc, users]);
 
   return (
     <div className="mx-auto max-w-[1600px] px-6 py-8">
-      <SectionHeader
-        eyebrow="USER RISK // QUEUE"
-        title="High-Risk Users"
-        description="Prioritized by Sentinel's behavioral graph and identity-risk scoring engine."
-      />
+      
 
       <div className="glass-panel rounded-xl">
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
@@ -76,56 +95,71 @@ function UsersPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/30 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2.5 text-left">User</th>
-                <th className="px-4 py-2.5 text-left">Department</th>
-                <th className="px-4 py-2.5 text-left">Location</th>
-                <th className="px-4 py-2.5 text-left">
-                  <button onClick={() => setSortDesc((s) => !s)} className="inline-flex items-center gap-1 hover:text-foreground">
-                    Risk Score <ArrowUpDown className="h-3 w-3" />
-                  </button>
-                </th>
-                <th className="px-4 py-2.5 text-left">Level</th>
-                <th className="px-4 py-2.5 text-right">Alerts</th>
-                <th className="px-4 py-2.5 text-left">Status</th>
-                <th className="px-4 py-2.5 text-left">Last Activity</th>
-                <th className="px-4 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((u) => (
-                <tr key={u.id} className="border-t border-border transition hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-primary/40 to-chart-5/40 font-mono text-[10px] font-semibold uppercase">
-                        {u.name.split(" ").map((n: string) => n[0]).join("")}
-                      </div>
-                      <div>
-                        <div className="font-medium">{u.name}</div>
-                        <div className="font-mono text-[10px] text-muted-foreground">{u.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{u.department}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{u.location}</td>
-                  <td className="px-4 py-3"><RiskScore score={u.riskScore} /></td>
-                  <td className="px-4 py-3"><RiskBadge level={u.riskLevel} /></td>
-                  <td className="px-4 py-3 text-right font-mono tabular-nums">{u.alerts}</td>
-                  <td className="px-4 py-3">
-                    <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{u.status}</span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{u.lastActivity}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Link to="/users/$userId" params={{ userId: u.id }} className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-primary hover:bg-primary/20">
-                      <Eye className="h-3 w-3" /> Investigate
-                    </Link>
-                  </td>
+          {isLoading ? (
+            // Loading element aligns perfectly to match the Sentinel security theme
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
+              <Loader2 className="h-7 w-7 animate-spin text-primary" />
+              <span className="font-mono text-xs uppercase tracking-widest">Compiling Analytical Records...</span>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="text-center py-20 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+              No entities tracked within target filter query
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2.5 text-left">User</th>
+                  <th className="px-4 py-2.5 text-left">Department</th>
+                  <th className="px-4 py-2.5 text-left">Location</th>
+                  <th className="px-4 py-2.5 text-left">
+                    <button onClick={() => setSortDesc((s) => !s)} className="inline-flex items-center gap-1 hover:text-foreground">
+                      Risk Score <ArrowUpDown className="h-3 w-3" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-2.5 text-left">Level</th>
+                  <th className="px-4 py-2.5 text-right">Alerts</th>
+                  <th className="px-4 py-2.5 text-left">Status</th>
+                  <th className="px-4 py-2.5 text-left">Last Activity</th>
+                  <th className="px-4 py-2.5"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((u) => {
+                  const initials = u.name ? u.name.split(" ").map((n: string) => n[0]).join("") : "??";
+                  return (
+                    <tr key={u.id} className="border-t border-border transition hover:bg-muted/30">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-primary/40 to-chart-5/40 font-mono text-[10px] font-semibold uppercase">
+                            {initials}
+                          </div>
+                          <div>
+                            <div className="font-medium">{u.name}</div>
+                            <div className="font-mono text-[10px] text-muted-foreground">{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{u.department}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{u.location}</td>
+                      <td className="px-4 py-3"><RiskScore score={u.riskScore} /></td>
+                      <td className="px-4 py-3"><RiskBadge level={u.riskLevel} /></td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">{u.alerts}</td>
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{u.status}</span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{u.lastActivity}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Link to="/users/$userId" params={{ userId: u.id }} className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-primary hover:bg-primary/20">
+                          <Eye className="h-3 w-3" /> Investigate
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
